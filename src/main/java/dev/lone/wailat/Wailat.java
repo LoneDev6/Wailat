@@ -13,28 +13,43 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.HashMap;
+import java.util.Objects;
 
 public final class Wailat extends JavaPlugin implements Listener
 {
-    HashMap<String, BossBar> bossBars = new HashMap<>();
-    HashMap<String, Integer> tasks = new HashMap<>();
+    private static Wailat instance;
+
+    public HashMap<String, PlayerData> playerDatas = new HashMap<>();
 
     static boolean hasItemsAdder = false;
+
+    public static Wailat inst()
+    {
+        return instance;
+    }
 
     @Override
     public void onEnable()
     {
+        instance = this;
+
         for(Player p : Bukkit.getServer().getOnlinePlayers())
+        {
             if(p.hasPermission("wailat.ui"))
-                registerBossbar(p);
+                registerPlayer(p);
+        }
+
+        hasItemsAdder = Bukkit.getPluginManager().isPluginEnabled("ItemsAdder");
+
+        if(Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI"))
+            new PAPI_Wailat().register();
+
 
         Bukkit.getPluginManager().registerEvents(this, this);
-
-        hasItemsAdder = (Bukkit.getPluginManager().getPlugin("ItemsAdder") != null);
     }
 
     @Override
@@ -45,61 +60,76 @@ public final class Wailat extends JavaPlugin implements Listener
     }
 
     @EventHandler
-    void onJoin(PlayerJoinEvent e)
+    private void onJoin(PlayerJoinEvent e)
     {
         if(e.getPlayer().hasPermission("wailat.ui"))
-            registerBossbar(e.getPlayer());
+            registerPlayer(e.getPlayer());
     }
 
     @EventHandler
-    void onLeave(PlayerQuitEvent e)
+    private void onLeave(PlayerQuitEvent e)
     {
         unregisterBossbar(e.getPlayer());
     }
 
-    private void unregisterBossbar(Player p)
-    {
-        BossBar boss = bossBars.get(p.getName());
-        if(boss == null)
-            return;
-        boss.removePlayer(p);
-        bossBars.remove(p.getName());
-        Bukkit.getScheduler().cancelTask(tasks.get(p.getName()));
-    }
-
-    void registerBossbar(Player p)
+    private void registerPlayer(Player p)
     {
         BossBar bossBar = Bukkit.createBossBar("", BarColor.WHITE, BarStyle.SOLID, new BarFlag[0]);
         bossBar.addPlayer(p);
-        bossBars.put(p.getName(), bossBar);
+        final PlayerData playerData = new PlayerData();
+        playerDatas.put(p.getName(), playerData);
 
-        int i = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, () -> {
-            Block block = p.getTargetBlockExact(8);
-            if (block == null || block.getType() == Material.AIR)
+        playerData.bossbar = bossBar;
+
+        final long interval = 5L;
+        playerData.refreshTaskId = Bukkit.getScheduler().scheduleSyncRepeatingTask(this, new Runnable()
+        {
+            long passedTicks = 0;
+
+            @Override
+            public void run()
             {
-                bossBar.setTitle("");
-                return;
+                passedTicks += interval;
+
+                Block block = p.getTargetBlockExact(8);
+
+                // Save CPU
+                if(p.isSneaking() != playerData.wasSneaking && Objects.equals(playerData.prevBlock, block))
+                    return;
+
+                playerData.prevBlock = block;
+                playerData.wasSneaking = p.isSneaking();
+
+                if (block == null || block.getType() == Material.AIR)
+                {
+                    bossBar.setTitle("");
+                    return;
+                }
+
+                if (!playerData.wasSneaking)
+                {
+                    bossBar.setTitle(ChatColor.GREEN + BlockUtil.getDisplayName(block));
+                    passedTicks = 0;
+                }
+                else
+                {
+                    if(passedTicks >= 15L) // Optimizing the drops getting code
+                    {
+                        bossBar.setTitle(BlockUtil.getDropsText(block));
+                        passedTicks = 0;
+                    }
+                }
             }
+        }, interval, interval);
+    }
 
-            if(!p.isSneaking())
-            {
-                bossBar.setTitle(ChatColor.GREEN + BlockUtil.getDisplayName(block));
-            }
-            else
-            {
-                StringBuilder title = new StringBuilder("Drops: ");
+    private void unregisterBossbar(Player p)
+    {
+        PlayerData playerData = playerDatas.get(p.getName());
+        if(playerData == null)
+            return;
 
-                for(ItemStack drop : block.getDrops())
-                    title.append(ItemStackUtil.getDisplayName(drop)).append(drop.getAmount() > 1 ? (" x" + drop.getAmount()) : "").append(", ");
-                title = new StringBuilder(title.substring(0, title.length() - 2));
-
-                if(title.toString().equals("Drops"))
-                    title = new StringBuilder("Drops nothing");
-
-                bossBar.setTitle(title.toString());
-            }
-        }, 20L, 5L);
-
-        tasks.put(p.getName(), i);
+        playerData.bossbar.removePlayer(p);
+        playerData.cancelRefreshTask();
     }
 }

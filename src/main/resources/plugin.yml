@@ -2,3 +2,7 @@ name: Wailat
 version: 1.0.6
 main: dev.lone.wailat.Wailat
 api-version: 1.13
+author: LoneDev
+softdepend:
+  - ItemsAdder
+  - PlaceholderAPI

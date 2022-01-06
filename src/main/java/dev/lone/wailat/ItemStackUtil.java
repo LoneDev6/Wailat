@@ -8,12 +8,11 @@ public class ItemStackUtil
 {
     public static String getDisplayName(ItemStack item)
     {
-        String name = "";
+        String name;
         if (item.hasItemMeta() && item.getItemMeta().hasDisplayName())
             name = ChatColor.GRAY + item.getItemMeta().getDisplayName();
         else
             name = ChatColor.GRAY + WordUtils.capitalizeFully(item.getType().toString()).replace("_", " ");
-
         return name;
     }
 }

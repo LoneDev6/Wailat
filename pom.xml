@@ -80,8 +80,12 @@
             <systemPath>${jars_libs_folder}/ItemsAdder.jar</systemPath>
         </dependency>
 
+        <dependency>
+            <groupId>libs</groupId>
+            <artifactId>PlaceholderAPI</artifactId>
+            <version>1.0</version>
+            <scope>system</scope>
+            <systemPath>${jars_libs_folder}/PlaceholderAPI-2.10.5.jar</systemPath>
+        </dependency>
     </dependencies>
-
-
-
 </project>
